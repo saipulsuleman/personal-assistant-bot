@@ -209,7 +209,7 @@ if "quick_prompt_input" not in st.session_state:
 with st.sidebar:
     st.markdown("### ⚙️ Konfigurasi & Tools")
     
-    # 1. API Key Input & Mode Demo
+    # 1. API Key Input
     env_api_key = os.getenv("GEMINI_API_KEY", "")
     api_key_input = st.text_input(
         "Gemini API Key",
@@ -219,17 +219,8 @@ with st.sidebar:
         help="Dapatkan API Key gratis di Google AI Studio (aistudio.google.com)"
     )
 
-    # Toggle Mode Demo (Otomatis menyala jika API key belum diisi)
-    demo_mode = st.toggle(
-        "🧪 Mode Demo (Tanpa API Key)",
-        value=not bool(api_key_input),
-        help="Aktifkan untuk mencoba simulasi AI cerdas secara instan tanpa perlu memasukkan API key."
-    )
-
-    if not api_key_input and not demo_mode:
-        st.warning("⚠️ Masukkan API Key atau aktifkan Mode Demo di atas.")
-    elif demo_mode:
-        st.info("💡 **Mode Demo Aktif**: Bot dapat langsung diajak berinteraksi dengan simulasi cerdas berbasis Persona & Cuaca.")
+    if not api_key_input:
+        st.warning("⚠️ Masukkan Gemini API Key untuk memulai obrolan.")
     else:
         st.caption("🟢 API Key tersambung ke Google Gemini")
 
@@ -341,7 +332,7 @@ with st.sidebar:
 # ==========================================
 # HEADER UTAMA APLIKASI
 # ==========================================
-badge_status = '<span class="aura-badge yellow">🟡 Mode Demo (Simulasi)</span>' if demo_mode else f'<span class="aura-badge green">● Model: {selected_model}</span>'
+badge_status = f'<span class="aura-badge green">● Model: {selected_model}</span>'
 
 st.markdown(
     f"""
@@ -410,12 +401,11 @@ if user_prompt:
         f"- Daftar Tugas yang Belum Selesai: {tasks_summary}"
     )
 
-    # 3. Panggil Gemini Client (dengan dukungan Mode Demo)
+    # 3. Panggil Gemini Client
     client = GeminiAssistantClient(
         api_key=api_key_input,
         model_name=selected_model,
-        temperature=temp_val,
-        demo_mode=demo_mode
+        temperature=temp_val
     )
 
     # 4. Stream respon AI
