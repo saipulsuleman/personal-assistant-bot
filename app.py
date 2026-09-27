@@ -104,6 +104,12 @@ CUSTOM_CSS = """
         color: #6EE7B7;
     }
 
+    .aura-badge.yellow {
+        background: rgba(245, 158, 11, 0.15);
+        border-color: rgba(251, 191, 36, 0.3);
+        color: #FCD34D;
+    }
+
     /* Quick Action Cards */
     .quick-action-header {
         font-size: 0.85rem;
@@ -203,7 +209,7 @@ if "quick_prompt_input" not in st.session_state:
 with st.sidebar:
     st.markdown("### ⚙️ Konfigurasi & Tools")
     
-    # 1. API Key Input
+    # 1. API Key Input & Mode Demo
     env_api_key = os.getenv("GEMINI_API_KEY", "")
     api_key_input = st.text_input(
         "Gemini API Key",
@@ -213,10 +219,30 @@ with st.sidebar:
         help="Dapatkan API Key gratis di Google AI Studio (aistudio.google.com)"
     )
 
-    if not api_key_input:
-        st.warning("⚠️ Masukkan Gemini API Key untuk memulai obrolan.")
+    # Toggle Mode Demo (Otomatis menyala jika API key belum diisi)
+    demo_mode = st.toggle(
+        "🧪 Mode Demo (Tanpa API Key)",
+        value=not bool(api_key_input),
+        help="Aktifkan untuk mencoba simulasi AI cerdas secara instan tanpa perlu memasukkan API key."
+    )
+
+    if not api_key_input and not demo_mode:
+        st.warning("⚠️ Masukkan API Key atau aktifkan Mode Demo di atas.")
+    elif demo_mode:
+        st.info("💡 **Mode Demo Aktif**: Bot dapat langsung diajak berinteraksi dengan simulasi cerdas berbasis Persona & Cuaca.")
     else:
-        st.caption("🟢 API Key siap digunakan")
+        st.caption("🟢 API Key tersambung ke Google Gemini")
+
+    with st.expander("❓ Cara Dapat API Key Gratis (1 Menit)"):
+        st.markdown(
+            """
+            1. Buka [aistudio.google.com](https://aistudio.google.com/)
+            2. Login dengan akun Google biasa.
+            3. Klik tombol **Get API key** lalu **Create API key**.
+            4. Salin kode `AIzaSy...` dan tempelkan ke kolom di atas.
+            *(100% Gratis tanpa perlu kartu kredit).*
+            """
+        )
 
     st.markdown('<div class="sidebar-section-title">🎭 Parameter Kreatif</div>', unsafe_allow_html=True)
 
@@ -315,6 +341,8 @@ with st.sidebar:
 # ==========================================
 # HEADER UTAMA APLIKASI
 # ==========================================
+badge_status = '<span class="aura-badge yellow">🟡 Mode Demo (Simulasi)</span>' if demo_mode else f'<span class="aura-badge green">● Model: {selected_model}</span>'
+
 st.markdown(
     f"""
     <div class="aura-header">
@@ -323,7 +351,7 @@ st.markdown(
             <p>{APP_TAGLINE}</p>
         </div>
         <div class="aura-badge-container">
-            <span class="aura-badge green">● Model: {selected_model}</span>
+            {badge_status}
             <span class="aura-badge">{selected_persona_name}</span>
             <span class="aura-badge">Temp: {temp_val}</span>
         </div>
@@ -382,11 +410,12 @@ if user_prompt:
         f"- Daftar Tugas yang Belum Selesai: {tasks_summary}"
     )
 
-    # 3. Panggil Gemini Client
+    # 3. Panggil Gemini Client (dengan dukungan Mode Demo)
     client = GeminiAssistantClient(
         api_key=api_key_input,
         model_name=selected_model,
-        temperature=temp_val
+        temperature=temp_val,
+        demo_mode=demo_mode
     )
 
     # 4. Stream respon AI
@@ -397,7 +426,8 @@ if user_prompt:
             prompt=user_prompt,
             system_instruction=current_persona["system_instruction"],
             history=history,
-            live_context=live_context
+            live_context=live_context,
+            persona_tag=current_persona["tag"]
         )
         full_response = st.write_stream(response_generator)
 
