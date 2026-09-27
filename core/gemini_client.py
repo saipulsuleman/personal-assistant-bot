@@ -89,52 +89,72 @@ class GeminiAssistantClient:
                 "Gunakan konteks ini secara proaktif jika relevan dengan pertanyaan atau sapaan pengguna."
             )
 
+        candidate_models = list(dict.fromkeys([
+            self.model_name,
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-3.1-pro",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash"
+        ]))
+
+        last_error = ""
+
         # 1. Menggunakan SDK Baru (google-genai)
         if NEW_SDK_AVAILABLE and self.client:
-            try:
-                contents = []
-                if history:
-                    for item in history:
-                        role = "user" if item.get("role") == "user" else "model"
-                        text_val = item.get("content", "")
-                        if text_val:
-                            contents.append(
-                                types.Content(
-                                    role=role,
-                                    parts=[types.Part.from_text(text=text_val)]
-                                )
+            contents = []
+            if history:
+                for item in history:
+                    role = "user" if item.get("role") == "user" else "model"
+                    text_val = item.get("content", "")
+                    if text_val:
+                        contents.append(
+                            types.Content(
+                                role=role,
+                                parts=[types.Part.from_text(text=text_val)]
                             )
-                contents.append(
-                    types.Content(
-                        role="user",
-                        parts=[types.Part.from_text(text=prompt)]
+                        )
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)]
+                )
+            )
+
+            config = types.GenerateContentConfig(
+                system_instruction=augmented_instruction,
+                temperature=self.temperature,
+                max_output_tokens=2048,
+            )
+
+            for cand_model in candidate_models:
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model=cand_model,
+                        contents=contents,
+                        config=config
                     )
-                )
 
-                config = types.GenerateContentConfig(
-                    system_instruction=augmented_instruction,
-                    temperature=self.temperature,
-                    max_output_tokens=2048,
-                )
-
-                response_stream = self.client.models.generate_content_stream(
-                    model=self.model_name,
-                    contents=contents,
-                    config=config
-                )
-
-                for chunk in response_stream:
-                    if chunk.text:
-                        yield chunk.text
-                return
-            except Exception as e:
-                err_msg = str(e)
-                if "API_KEY_INVALID" in err_msg or "invalid api key" in err_msg.lower():
-                    yield "❌ **Kunci API tidak valid.** Silakan periksa kembali API Key dari Google AI Studio atau aktifkan Mode Demo."
-                    return
-                elif "quota" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
-                    yield "⚠️ **Batas kuota API tercapai.** Silakan tunggu sebentar atau gunakan Mode Demo."
-                    return
+                    streamed_any = False
+                    for chunk in response_stream:
+                        if chunk.text:
+                            streamed_any = True
+                            yield chunk.text
+                    
+                    if streamed_any:
+                        return
+                except Exception as e:
+                    err_msg = str(e)
+                    last_error = err_msg
+                    if "API_KEY_INVALID" in err_msg or "invalid api key" in err_msg.lower():
+                        yield "❌ **Kunci API tidak valid.** Silakan salin ulang API Key yang benar dari Google AI Studio atau aktifkan Mode Demo."
+                        return
+                    if "quota" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                        yield "⚠️ **Batas kuota API tercapai.** Silakan tunggu beberapa detik atau gunakan Mode Demo."
+                        return
+                    # Jika 404 / model tidak ditemukan, lanjut mencoba model berikutnya di daftar kandidat
+                    continue
 
         # 2. Fallback SDK Legacy (google-generativeai)
         if LEGACY_SDK_AVAILABLE:
@@ -144,11 +164,6 @@ class GeminiAssistantClient:
                     temperature=self.temperature,
                     max_output_tokens=2048,
                 )
-                model = legacy_genai.GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=augmented_instruction,
-                    generation_config=gen_config
-                )
                 chat_history = []
                 if history:
                     for item in history:
@@ -157,14 +172,36 @@ class GeminiAssistantClient:
                             "role": role,
                             "parts": [item.get("content", "")]
                         })
-                chat = model.start_chat(history=chat_history)
-                response = chat.send_message(prompt, stream=True)
-                for chunk in response:
-                    if chunk.text:
-                        yield chunk.text
-                return
+
+                for cand_model in candidate_models:
+                    try:
+                        model = legacy_genai.GenerativeModel(
+                            model_name=cand_model,
+                            system_instruction=augmented_instruction,
+                            generation_config=gen_config
+                        )
+                        chat = model.start_chat(history=chat_history)
+                        response = chat.send_message(prompt, stream=True)
+                        streamed_any = False
+                        for chunk in response:
+                            if chunk.text:
+                                streamed_any = True
+                                yield chunk.text
+                        if streamed_any:
+                            return
+                    except Exception as e:
+                        last_error = str(e)
+                        continue
             except Exception as e:
-                yield f"❌ Terjadi kesalahan koneksi API: `{str(e)}`. Silakan coba Mode Demo di sidebar."
+                last_error = str(e)
+
+        # Jika seluruh model kandidat gagal diakses
+        yield (
+            f"❌ **Koneksi Model Gagal**: `{last_error}`\n\n"
+            "💡 *Saran Solusi*:\n"
+            "1. Google AI Studio sering memperbarui daftar model aktif. Silakan pilih model **`gemini-3.8-flash`** atau **`gemini-3.5-flash-lite`** pada dropdown Model AI di sidebar.\n"
+            "2. Atau aktifkan **`🧪 Mode Demo (Tanpa API Key)`** di sidebar untuk menjalankan simulasi tanpa hambatan."
+        )
 
     def _generate_simulated_stream(
         self,

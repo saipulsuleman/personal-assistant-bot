@@ -71,9 +71,12 @@ QUICK_ACTIONS = [
     }
 ]
 
-# Model Default
+# Model Default (Memprioritaskan model Gemini terbaru yang aktif di Google AI Studio)
 AVAILABLE_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.1-pro",
     "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-2.0-flash-exp"
+    "gemini-1.5-pro"
 ]
