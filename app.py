@@ -19,7 +19,7 @@ from core.config import (
     QUICK_ACTIONS,
     AVAILABLE_MODELS
 )
-from core.tools import get_live_weather
+from core.tools import get_live_weather, resolve_live_weather_for_query
 from core.memory import MemoryManager
 from core.gemini_client import GeminiAssistantClient
 
@@ -270,14 +270,16 @@ with st.sidebar:
             help="Rendah = lebih presisi & terstruktur. Tinggi = lebih kreatif & eksploratif."
         )
 
-    # 5. Live Weather Integration (External Tool)
-    st.markdown('<div class="sidebar-section-title">🌤️ Live Weather Briefing</div>', unsafe_allow_html=True)
+    # 5. Live Weather Integration (External Tool - Akses Seluruh Kota di Dunia)
+    st.markdown('<div class="sidebar-section-title">🌤️ Live Weather Briefing (Global)</div>', unsafe_allow_html=True)
     city_col1, city_col2 = st.columns([3, 1])
     with city_col1:
-        city_query = st.text_input("Kota:", value="Jakarta", label_visibility="collapsed")
+        current_city_val = st.session_state.weather_cache.get("city", "Jakarta")
+        city_query = st.text_input("Kota:", value=current_city_val, placeholder="Gorontalo, Tokyo, London...", label_visibility="collapsed")
     with city_col2:
         if st.button("🔄", help="Cek Cuaca Terkini"):
             st.session_state.weather_cache = get_live_weather(city_query)
+            st.rerun()
 
     weather_data = st.session_state.weather_cache
     if weather_data.get("success"):
@@ -295,6 +297,7 @@ with st.sidebar:
         )
     else:
         st.caption(f"Info cuaca: {weather_data.get('message', 'Tidak tersedia')}")
+    st.caption("🌍 *Mendukung seluruh kota di Indonesia & dunia.*")
 
     # 6. Session Controls & Export
     st.markdown('<div class="sidebar-section-title">💾 Manajemen Sesi</div>', unsafe_allow_html=True)
@@ -378,19 +381,31 @@ if user_prompt:
     with st.chat_message("user", avatar="👤"):
         st.markdown(user_prompt)
 
-    # 2. Susun Konteks Real-Time (Cuaca dan Domain Fokus)
-    weather_summary = st.session_state.weather_cache.get("summary", "Informasi cuaca tidak tersedia.")
+    # 2. Deteksi cuaca kota secara otomatis (Akses Global ke Seluruh Kota di Dunia)
+    current_city_setting = st.session_state.weather_cache.get("city", "Jakarta")
+    dynamic_weather = resolve_live_weather_for_query(user_prompt, fallback_city=current_city_setting)
+    
+    # Update cache tampilan cuaca
+    if dynamic_weather.get("success"):
+        st.session_state.weather_cache = dynamic_weather
+
+    weather_summary = dynamic_weather.get("summary", "Informasi cuaca tidak tersedia.")
     domain_instruction = DOMAIN_FOCUSES.get(selected_domain_name, "")
 
     live_context = (
-        f"- Cuaca Real-Time: {weather_summary}\n"
+        f"- Telemetri Cuaca Real-Time Global Tool: {weather_summary}\n"
         f"- Domain Fokus Pengguna: {domain_instruction}"
     )
 
-    # Gabungkan System Instruction Persona dengan Domain Fokus
+    # Gabungkan System Instruction Persona dengan Domain Fokus & Kapabilitas Global Weather Tool
     effective_system_instruction = (
         f"{current_persona['system_instruction']}\n\n"
-        f"[PANDUAN DOMAIN SPESIALISASI]:\n{domain_instruction}"
+        f"[PANDUAN DOMAIN SPESIALISASI]:\n{domain_instruction}\n\n"
+        "[KAPABILITAS TOOLS GLOBAL]:\n"
+        "Anda terhubung langsung dengan Global Live Weather Tool (Open-Meteo) yang memiliki akses data cuaca dan suhu untuk SELURUH KOTA DI DUNIA "
+        "(termasuk seluruh kota di Indonesia seperti Gorontalo, Bandung, Surabaya, Makassar, Manado, Medan, maupun kota-kota internasional seperti Tokyo, London, Paris, New York). "
+        "JANGAN PERNAH mengatakan bahwa telemetri Anda terbatas hanya di Jakarta. "
+        "Gunakan data telemetri cuaca yang disediakan pada konteks real-time untuk menjawab pertanyaan pengguna mengenai cuaca dan suhu secara akurat, ramah, dan profesional."
     )
 
     # 3. Panggil Gemini Client
