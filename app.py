@@ -15,10 +15,11 @@ from core.config import (
     APP_SUBTITLE,
     APP_TAGLINE,
     PERSONAS,
+    DOMAIN_FOCUSES,
     QUICK_ACTIONS,
     AVAILABLE_MODELS
 )
-from core.tools import get_live_weather, TaskManager
+from core.tools import get_live_weather
 from core.memory import MemoryManager
 from core.gemini_client import GeminiAssistantClient
 
@@ -27,7 +28,7 @@ load_dotenv()
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
-    page_title=f"{APP_NAME} - Personal Assistant Bot",
+    page_title=f"{APP_NAME} - Personal Assistant Copilot",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -81,7 +82,7 @@ CUSTOM_CSS = """
 
     .aura-badge-container {
         display: flex;
-        gap: 0.6rem;
+        gap: 0.5rem;
         flex-wrap: wrap;
     }
 
@@ -104,10 +105,10 @@ CUSTOM_CSS = """
         color: #6EE7B7;
     }
 
-    .aura-badge.yellow {
-        background: rgba(245, 158, 11, 0.15);
-        border-color: rgba(251, 191, 36, 0.3);
-        color: #FCD34D;
+    .aura-badge.cyan {
+        background: rgba(56, 189, 248, 0.15);
+        border-color: rgba(56, 189, 248, 0.3);
+        color: #7DD3FC;
     }
 
     /* Quick Action Cards */
@@ -185,15 +186,12 @@ if "messages" not in st.session_state:
             "role": "model",
             "content": (
                 "Halo! Saya **AURA**, asisten produktivitas & *life copilot* Anda. ⚡\n\n"
-                "Saya dapat membantu Anda mengelola agenda, membuat to-do list interaktif, "
-                "meringkas materi data science, hingga merancang sesi fokus harian. "
-                "Pilih persona yang Anda inginkan di bilah sisi atau klik tombol aksi cepat di bawah untuk memulai!"
+                "Saya siap membantu Anda menyusun rencana kerja harian, merangkum materi teknis, "
+                "mengevaluasi prioritas Eisenhower, hingga merancang sesi kerja fokus.\n\n"
+                "Silakan pilih persona dan domain fokus di bilah sisi, atau klik salah satu tombol aksi cepat di bawah untuk memulai!"
             )
         }
     ]
-
-if "tasks" not in st.session_state:
-    st.session_state.tasks = TaskManager.create_initial_tasks()
 
 if "weather_cache" not in st.session_state:
     default_city = os.getenv("DEFAULT_CITY", "Jakarta")
@@ -224,30 +222,37 @@ with st.sidebar:
     else:
         st.caption("🟢 API Key tersambung ke Google Gemini")
 
-    with st.expander("❓ Cara Dapat API Key Gratis (1 Menit)"):
+    with st.expander("❓ Cara Dapat API Key Gratis"):
         st.markdown(
             """
             1. Buka [aistudio.google.com](https://aistudio.google.com/)
-            2. Login dengan akun Google biasa.
+            2. Login dengan akun Google (Gmail).
             3. Klik tombol **Get API key** lalu **Create API key**.
             4. Salin kode `AIzaSy...` dan tempelkan ke kolom di atas.
-            *(100% Gratis tanpa perlu kartu kredit).*
             """
         )
 
     st.markdown('<div class="sidebar-section-title">🎭 Parameter Kreatif</div>', unsafe_allow_html=True)
 
-    # 2. Persona Selector
+    # 2. Persona Selector (Parameter Kreatif 1)
     selected_persona_name = st.selectbox(
-        "Pilih Persona & Gaya Komunikasi:",
+        "Persona & Gaya Bahasa:",
         options=list(PERSONAS.keys()),
         index=0,
-        help="Mengubah karakter dan cara asisten merespons pesan Anda."
+        help="Menentukan gaya bahasa dan cara asisten merespons pesan."
     )
     current_persona = PERSONAS[selected_persona_name]
     st.info(f"**Gaya**: {current_persona['description']}")
 
-    # 3. Model & Suhu (Creativity / Temperature)
+    # 3. Domain Fokus Keahlian (Parameter Kreatif 2)
+    selected_domain_name = st.selectbox(
+        "Domain Fokus Keahlian:",
+        options=list(DOMAIN_FOCUSES.keys()),
+        index=0,
+        help="Menyesuaikan spesialisasi pengetahuan dan prioritas saran dari asisten."
+    )
+
+    # 4. Model & Suhu (Creativity / Temperature)
     col_m1, col_m2 = st.columns(2)
     with col_m1:
         selected_model = st.selectbox(
@@ -262,10 +267,10 @@ with st.sidebar:
             max_value=1.0,
             value=0.7,
             step=0.1,
-            help="Nilai rendah = lebih faktual & terstruktur. Nilai tinggi = lebih kreatif & eksploratif."
+            help="Rendah = lebih presisi & terstruktur. Tinggi = lebih kreatif & eksploratif."
         )
 
-    # 4. Live Weather Integration (External Tool)
+    # 5. Live Weather Integration (External Tool)
     st.markdown('<div class="sidebar-section-title">🌤️ Live Weather Briefing</div>', unsafe_allow_html=True)
     city_col1, city_col2 = st.columns([3, 1])
     with city_col1:
@@ -291,23 +296,6 @@ with st.sidebar:
     else:
         st.caption(f"Info cuaca: {weather_data.get('message', 'Tidak tersedia')}")
 
-    # 5. Interactive Task Manager (To-Do List)
-    st.markdown('<div class="sidebar-section-title">📋 To-Do List Harian</div>', unsafe_allow_html=True)
-    
-    # Checkbox items
-    for task in st.session_state.tasks:
-        checked = st.checkbox(task["task"], value=task["completed"], key=f"task_{task['id']}")
-        task["completed"] = checked
-
-    # Form tambah tugas baru
-    with st.form("new_task_form", clear_on_submit=True):
-        new_task_desc = st.text_input("Tambah tugas baru:", placeholder="Misal: Siapkan materi slide...")
-        submitted = st.form_submit_button("➕ Tambah Tugas")
-        if submitted and new_task_desc.strip():
-            new_id = max([t["id"] for t in st.session_state.tasks], default=0) + 1
-            st.session_state.tasks.append({"id": new_id, "task": new_task_desc.strip(), "completed": False})
-            st.rerun()
-
     # 6. Session Controls & Export
     st.markdown('<div class="sidebar-section-title">💾 Manajemen Sesi</div>', unsafe_allow_html=True)
     col_s1, col_s2 = st.columns(2)
@@ -318,7 +306,7 @@ with st.sidebar:
     with col_s2:
         chat_markdown = MemoryManager.export_chat_to_markdown(
             st.session_state.messages,
-            selected_persona_name
+            f"{selected_persona_name} ({selected_domain_name})"
         )
         st.download_button(
             label="📥 Ekspor",
@@ -332,8 +320,6 @@ with st.sidebar:
 # ==========================================
 # HEADER UTAMA APLIKASI
 # ==========================================
-badge_status = f'<span class="aura-badge green">● Model: {selected_model}</span>'
-
 st.markdown(
     f"""
     <div class="aura-header">
@@ -342,8 +328,9 @@ st.markdown(
             <p>{APP_TAGLINE}</p>
         </div>
         <div class="aura-badge-container">
-            {badge_status}
+            <span class="aura-badge green">● Model: {selected_model}</span>
             <span class="aura-badge">{selected_persona_name}</span>
+            <span class="aura-badge cyan">{selected_domain_name}</span>
             <span class="aura-badge">Temp: {temp_val}</span>
         </div>
     </div>
@@ -391,14 +378,19 @@ if user_prompt:
     with st.chat_message("user", avatar="👤"):
         st.markdown(user_prompt)
 
-    # 2. Susun Konteks Real-Time (Cuaca dan Tugas Terbuka)
-    active_tasks = [t["task"] for t in st.session_state.tasks if not t["completed"]]
-    tasks_summary = ", ".join(active_tasks) if active_tasks else "Semua tugas saat ini telah selesai!"
+    # 2. Susun Konteks Real-Time (Cuaca dan Domain Fokus)
     weather_summary = st.session_state.weather_cache.get("summary", "Informasi cuaca tidak tersedia.")
+    domain_instruction = DOMAIN_FOCUSES.get(selected_domain_name, "")
 
     live_context = (
-        f"- Cuaca: {weather_summary}\n"
-        f"- Daftar Tugas yang Belum Selesai: {tasks_summary}"
+        f"- Cuaca Real-Time: {weather_summary}\n"
+        f"- Domain Fokus Pengguna: {domain_instruction}"
+    )
+
+    # Gabungkan System Instruction Persona dengan Domain Fokus
+    effective_system_instruction = (
+        f"{current_persona['system_instruction']}\n\n"
+        f"[PANDUAN DOMAIN SPESIALISASI]:\n{domain_instruction}"
     )
 
     # 3. Panggil Gemini Client
@@ -410,11 +402,10 @@ if user_prompt:
 
     # 4. Stream respon AI
     with st.chat_message("assistant", avatar=current_persona["avatar"]):
-        # History sliding window (10 turn terakhir)
         history = st.session_state.messages[:-1]
         response_generator = client.generate_chat_stream(
             prompt=user_prompt,
-            system_instruction=current_persona["system_instruction"],
+            system_instruction=effective_system_instruction,
             history=history,
             live_context=live_context,
             persona_tag=current_persona["tag"]

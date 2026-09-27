@@ -2,10 +2,9 @@
 External Tools and Utilities for AURA Assistant
 Includes:
 1. Live Weather Integration (Open-Meteo API - Free, No API Key Required)
-2. Task & Agenda Manager (Local state management)
 """
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
 # Mapping WMO Weather Code ke Bahasa Indonesia & Emoji
 WEATHER_CODE_MAP = {
@@ -89,17 +88,3 @@ def get_live_weather(city_name: str = "Jakarta") -> Dict[str, Any]:
             "success": False,
             "message": f"Koneksi cuaca gagal: {str(e)}"
         }
-
-
-class TaskManager:
-    """
-    Pengelola to-do list / agenda lokal untuk sesi pengguna.
-    """
-    @staticmethod
-    def create_initial_tasks() -> List[Dict[str, Any]]:
-        return [
-            {"id": 1, "task": "Review materi Gemini API & LLM Tools", "completed": True},
-            {"id": 2, "task": "Brainstorming Use Case & Parameter Kreatif", "completed": True},
-            {"id": 3, "task": "Jalankan AURA Assistant & Cek Cuaca Harian", "completed": False},
-            {"id": 4, "task": "Ambil Screenshot UI untuk Final Project", "completed": False},
-        ]
