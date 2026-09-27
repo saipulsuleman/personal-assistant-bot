@@ -15,6 +15,9 @@ try:
 except ImportError:
     NEW_SDK_AVAILABLE = False
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 # Fallback ke google-generativeai jika diperlukan
 try:
     import google.generativeai as legacy_genai
